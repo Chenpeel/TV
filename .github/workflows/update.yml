@@ -1,0 +1,81 @@
+name: IPTV Workflow
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+env:
+  TZ: Asia/Shanghai
+
+jobs:
+  check-links:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: "3.10"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nmap
+          pip install -r requirements.txt
+
+      - name: Download necessary files
+        run: |
+          wget https://raw.githubusercontent.com/fanmingming/live/master/tv/m3u/ipv6.m3u -O CCTV.m3u
+          wget https://raw.githubusercontent.com/fanmingming/live/master/tv/m3u/ipv6.m3u -O IPTV-f-v6.m3u
+          wget https://raw.githubusercontent.com/BurningC4/Chinese-IPTV/master/TV-IPV4.m3u -O TV-IPV4.m3u
+          wget https://raw.githubusercontent.com/fanmingming/live/master/tv/m3u/ipv6.m3u -O CNTV1.m3u
+          wget https://raw.githubusercontent.com/fanmingming/live/master/tv/m3u/ipv6.m3u -O CNTV2.m3u
+          wget https://raw.githubusercontent.com/fanmingming/live/master/tv/m3u/ipv6.m3u -O CNTV3.m3u
+          wget https://raw.githubusercontent.com/YanG-1989/m3u/master/Gather.m3u -O 4k.m3u
+          wget https://raw.githubusercontent.com/YanG-1989/m3u/master/Gather.m3u -O 4k.txt
+
+      - name: Validate and update links
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MAX_RETRIES: 3
+          TIMEOUT: 5
+          MAX_WORKERS: 10
+        run: python validate_links.py
+
+      - name: Combine M3U files
+        run: |
+          echo "#EXTM3U" > combined.m3u
+          cat CCTV.m3u >> combined.m3u
+          cat IPTV-f-v6.m3u >> combined.m3u
+          cat TV-IPV4.m3u >> combined.m3u
+          cat CNTV1.m3u >> combined.m3u
+          cat CNTV2.m3u >> combined.m3u
+          cat CNTV3.m3u >> combined.m3u
+          cat 4k.m3u >> combined.m3u
+          cat 4k.txt >> combined.m3u
+
+      - name: Push combined M3U file
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add combined.m3u
+          git commit -m "Update combined M3U file"
+          git push origin master
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          push: true
+          tags: chenpeel0/tv:latest
+        env:
+          DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
