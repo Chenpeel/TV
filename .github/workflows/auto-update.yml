@@ -1,4 +1,4 @@
-name: IPTV Workflow
+name: IPTV Resources
 
 on:
   schedule:
